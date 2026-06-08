@@ -28,10 +28,26 @@ func newRootCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(newAddCommand())
+	cmd.AddCommand(newInitCommand())
 	cmd.AddCommand(newRemoveCommand())
 	cmd.AddCommand(newListCommand())
 
 	return cmd
+}
+
+func newInitCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "init",
+		Short: "初始化系统 Caddy 配置",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, _, caddyManager, err := newRuntime()
+			if err != nil {
+				return err
+			}
+			return initCaddy(caddyManager)
+		},
+	}
 }
 
 func newAddCommand() *cobra.Command {
@@ -124,6 +140,17 @@ func add(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager,
 
 	fmt.Println("已添加代理:")
 	printRulesTable([]config.Rule{findRuleByDomain(state.Rules, domain)})
+	return nil
+}
+
+func initCaddy(caddyManager *caddy.Manager) error {
+	if err := caddyManager.Init(); err != nil {
+		return err
+	}
+	if err := caddyManager.Reload(); err != nil {
+		return err
+	}
+	fmt.Println("fast-proxy Caddy 配置已初始化")
 	return nil
 }
 

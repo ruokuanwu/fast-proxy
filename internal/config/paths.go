@@ -14,6 +14,11 @@ type Paths struct {
 	SitesDir   string
 }
 
+const (
+	DefaultCaddyfile = "/etc/caddy/Caddyfile"
+	DefaultSitesDir  = "/etc/caddy/fast-proxy"
+)
+
 func ResolvePaths() (Paths, error) {
 	home, err := resolveHomeDir()
 	if err != nil {
@@ -25,8 +30,8 @@ func ResolvePaths() (Paths, error) {
 		HomeDir:    home,
 		ConfigDir:  configDir,
 		ConfigFile: filepath.Join(configDir, "config.json"),
-		Caddyfile:  filepath.Join(configDir, "Caddyfile"),
-		SitesDir:   filepath.Join(configDir, "sites"),
+		Caddyfile:  DefaultCaddyfile,
+		SitesDir:   DefaultSitesDir,
 	}, nil
 }
 
