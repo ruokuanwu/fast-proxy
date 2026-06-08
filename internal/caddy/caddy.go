@@ -45,7 +45,7 @@ func (m *Manager) Sync(rules []config.Rule) error {
 
 	for _, rule := range rules {
 		path := filepath.Join(m.sitesDir, rule.Domain+".caddy")
-		content := fmt.Sprintf("%s {\n    reverse_proxy %s\n}\n", rule.Domain, rule.Target)
+		content := fmt.Sprintf("%s {\n    tls internal\n    reverse_proxy %s\n}\n", rule.Domain, rule.Target)
 		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 			return err
 		}

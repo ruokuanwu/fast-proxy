@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {
+      "id": "d3028bb43f18",
+      "domain": "example.test",
+      "target": "localhost:3000"
+    }
+  ]
+}

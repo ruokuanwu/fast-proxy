@@ -51,9 +51,9 @@ func newAddCommand() *cobra.Command {
 
 func newRemoveCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:     "remove <domain>",
+		Use:     "remove <id>",
 		Aliases: []string{"rm", "delete"},
-		Short:   "删除本地域名反向代理",
+		Short:   "按 ID 删除本地域名反向代理",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, hostFile, caddyManager, err := newRuntime()
@@ -106,7 +106,9 @@ func add(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager,
 		return err
 	}
 
-	state.Upsert(config.Rule{Domain: domain, Target: target})
+	if err := state.Upsert(config.Rule{Domain: domain, Target: target}); err != nil {
+		return err
+	}
 	if err := store.Save(state); err != nil {
 		return err
 	}
@@ -120,12 +122,13 @@ func add(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager,
 		return err
 	}
 
-	fmt.Printf("已添加代理: %s -> %s\n", domain, target)
+	fmt.Println("已添加代理:")
+	printRulesTable([]config.Rule{findRuleByDomain(state.Rules, domain)})
 	return nil
 }
 
-func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager, domain string) error {
-	if err := validateDomain(domain); err != nil {
+func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager, id string) error {
+	if err := validateRuleID(id); err != nil {
 		return err
 	}
 
@@ -134,8 +137,9 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 		return err
 	}
 
-	if !state.Remove(domain) {
-		fmt.Printf("规则不存在: %s\n", domain)
+	rule, ok := state.RemoveByID(id)
+	if !ok {
+		fmt.Printf("规则不存在: %s\n", id)
 		return nil
 	}
 
@@ -152,7 +156,8 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 		return err
 	}
 
-	fmt.Printf("已删除代理: %s\n", domain)
+	fmt.Println("已删除代理:")
+	printRulesTable([]config.Rule{rule})
 	return nil
 }
 
@@ -161,14 +166,50 @@ func list(store *config.Store) error {
 	if err != nil {
 		return err
 	}
-	if len(state.Rules) == 0 {
-		fmt.Println("暂无代理规则")
-		return nil
-	}
-	for _, rule := range state.Rules {
-		fmt.Printf("%s -> %s\n", rule.Domain, rule.Target)
-	}
+	printRulesTable(state.Rules)
 	return nil
+}
+
+func printRulesTable(rules []config.Rule) {
+	widths := []int{12, len("DOMAIN"), len("TARGET")}
+	for _, rule := range rules {
+		widths[0] = max(widths[0], len(rule.ID))
+		widths[1] = max(widths[1], len(rule.Domain))
+		widths[2] = max(widths[2], len(rule.Target))
+	}
+
+	printTableBorder(widths)
+	printTableRow(widths, []string{"ID", "DOMAIN", "TARGET"})
+	printTableBorder(widths)
+	for _, rule := range rules {
+		printTableRow(widths, []string{rule.ID, rule.Domain, rule.Target})
+	}
+	printTableBorder(widths)
+}
+
+func printTableBorder(widths []int) {
+	fmt.Print("+")
+	for _, width := range widths {
+		fmt.Print(strings.Repeat("-", width+2), "+")
+	}
+	fmt.Println()
+}
+
+func printTableRow(widths []int, values []string) {
+	fmt.Print("|")
+	for i, value := range values {
+		fmt.Printf(" %-*s |", widths[i], value)
+	}
+	fmt.Println()
+}
+
+func findRuleByDomain(rules []config.Rule, domain string) config.Rule {
+	for _, rule := range rules {
+		if rule.Domain == domain {
+			return rule
+		}
+	}
+	return config.Rule{Domain: domain}
 }
 
 func validateDomain(domain string) error {
@@ -180,6 +221,16 @@ func validateDomain(domain string) error {
 	}
 	if strings.ContainsAny(domain, " /:") {
 		return fmt.Errorf("domain 格式错误: %s", domain)
+	}
+	return nil
+}
+
+func validateRuleID(id string) error {
+	if id == "" {
+		return errors.New("id 不能为空")
+	}
+	if strings.ContainsAny(id, " \t\n\r") {
+		return fmt.Errorf("id 格式错误: %s", id)
 	}
 	return nil
 }

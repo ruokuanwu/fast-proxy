@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -9,6 +11,7 @@ import (
 )
 
 type Rule struct {
+	ID     string `json:"id"`
 	Domain string `json:"domain"`
 	Target string `json:"target"`
 }
@@ -17,26 +20,75 @@ type State struct {
 	Rules []Rule `json:"rules"`
 }
 
-func (s *State) Upsert(rule Rule) {
-	for i, existing := range s.Rules {
-		if existing.Domain == rule.Domain {
-			s.Rules[i] = rule
-			s.Sort()
-			return
+func (s *State) EnsureIDs() (bool, error) {
+	changed := false
+	for i := range s.Rules {
+		if s.Rules[i].ID != "" {
+			continue
 		}
+
+		id, err := s.NewRuleID()
+		if err != nil {
+			return false, err
+		}
+		s.Rules[i].ID = id
+		changed = true
 	}
-	s.Rules = append(s.Rules, rule)
-	s.Sort()
+	return changed, nil
 }
 
-func (s *State) Remove(domain string) bool {
-	for i, rule := range s.Rules {
-		if rule.Domain == domain {
-			s.Rules = append(s.Rules[:i], s.Rules[i+1:]...)
+func (s *State) NewRuleID() (string, error) {
+	for {
+		id, err := generateRuleID()
+		if err != nil {
+			return "", err
+		}
+		if !s.HasID(id) {
+			return id, nil
+		}
+	}
+}
+
+func (s *State) HasID(id string) bool {
+	for _, rule := range s.Rules {
+		if rule.ID == id {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *State) Upsert(rule Rule) error {
+	for i, existing := range s.Rules {
+		if existing.Domain == rule.Domain {
+			if rule.ID == "" {
+				rule.ID = existing.ID
+			}
+			s.Rules[i] = rule
+			s.Sort()
+			return nil
+		}
+	}
+	if rule.ID == "" {
+		id, err := s.NewRuleID()
+		if err != nil {
+			return err
+		}
+		rule.ID = id
+	}
+	s.Rules = append(s.Rules, rule)
+	s.Sort()
+	return nil
+}
+
+func (s *State) RemoveByID(id string) (Rule, bool) {
+	for i, rule := range s.Rules {
+		if rule.ID == id {
+			s.Rules = append(s.Rules[:i], s.Rules[i+1:]...)
+			return rule, true
+		}
+	}
+	return Rule{}, false
 }
 
 func (s *State) Sort() {
@@ -69,7 +121,16 @@ func (s *Store) Load() (State, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return State{}, err
 	}
+	changed, err := state.EnsureIDs()
+	if err != nil {
+		return State{}, err
+	}
 	state.Sort()
+	if changed {
+		if err := s.Save(state); err != nil {
+			return State{}, err
+		}
+	}
 	return state, nil
 }
 
@@ -90,4 +151,12 @@ func (s *Store) Save(state State) error {
 		return err
 	}
 	return os.Rename(tmp, s.path)
+}
+
+func generateRuleID() (string, error) {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
