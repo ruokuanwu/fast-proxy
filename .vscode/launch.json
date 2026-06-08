@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug fast-proxy",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/fast-proxy",
+            "args": [
+                "list"
+            ],
+            "env": {
+                "FAST_PROXY_HOME": "${workspaceFolder}/.runtime"
+            }
+        },
+        {
+            "name": "Debug fast-proxy add example",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/fast-proxy",
+            "args": [
+                "add",
+                "example.test",
+                "localhost:3000"
+            ],
+            "env": {
+                "FAST_PROXY_HOME": "${workspaceFolder}/.runtime"
+            }
+        }
+    ]
+}
