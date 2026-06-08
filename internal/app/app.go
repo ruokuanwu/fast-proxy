@@ -183,10 +183,24 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 	if err != nil {
 		return err
 	}
+	resolvedIDs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		resolvedID, ok, err := resolveRuleIDPrefix(state.Rules, id)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		resolvedIDs = append(resolvedIDs, resolvedID)
+	}
+	if len(resolvedIDs) == 0 {
+		return nil
+	}
 	localBefore := len(localTargetRules(state.Rules))
 
-	removed := make([]config.Rule, 0, len(ids))
-	for _, id := range ids {
+	removed := make([]config.Rule, 0, len(resolvedIDs))
+	for _, id := range resolvedIDs {
 		rule, ok := state.RemoveByID(id)
 		if !ok {
 			fmt.Printf("规则不存在: %s\n", id)
@@ -216,6 +230,28 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 
 	printRulesTable(removed)
 	return nil
+}
+
+func resolveRuleIDPrefix(rules []config.Rule, prefix string) (string, bool, error) {
+	for _, rule := range rules {
+		if rule.ID == prefix {
+			return rule.ID, true, nil
+		}
+	}
+
+	matches := make([]string, 0, 2)
+	for _, rule := range rules {
+		if strings.HasPrefix(rule.ID, prefix) {
+			matches = append(matches, rule.ID)
+			if len(matches) > 1 {
+				return "", false, fmt.Errorf("id 前缀不唯一: %s，匹配到: %s", prefix, strings.Join(matches, ", "))
+			}
+		}
+	}
+	if len(matches) == 0 {
+		return "", false, nil
+	}
+	return matches[0], true, nil
 }
 
 func list(store *config.Store) error {
