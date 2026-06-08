@@ -3,6 +3,7 @@ package hosts
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,7 +37,7 @@ func (f *File) Sync(rules []config.Rule) error {
 	}
 
 	for _, rule := range rules {
-		next = append(next, fmt.Sprintf("127.0.0.1 %s %s", rule.Domain, marker))
+		next = append(next, fmt.Sprintf("%s %s %s", hostAddress(rule.Target), rule.Domain, marker))
 	}
 
 	content := strings.TrimRight(strings.Join(next, "\n"), "\n") + "\n"
@@ -47,6 +48,20 @@ func (f *File) Sync(rules []config.Rule) error {
 		return err
 	}
 	return nil
+}
+
+func hostAddress(target string) string {
+	host, _, ok := strings.Cut(target, ":")
+	if !ok {
+		host = target
+	}
+	if host == "localhost" {
+		return "127.0.0.1"
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return host
+	}
+	return "127.0.0.1"
 }
 
 func writeFileAtomic(path string, data []byte, fallbackMode os.FileMode) error {

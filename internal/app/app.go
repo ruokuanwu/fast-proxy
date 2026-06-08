@@ -67,16 +67,16 @@ func newAddCommand() *cobra.Command {
 
 func newRemoveCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:     "remove <id>",
+		Use:     "remove <id> [id...]",
 		Aliases: []string{"rm", "delete"},
 		Short:   "按 ID 删除本地域名反向代理",
-		Args:    cobra.ExactArgs(1),
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, hostFile, caddyManager, err := newRuntime()
 			if err != nil {
 				return err
 			}
-			return remove(store, hostFile, caddyManager, args[0])
+			return remove(store, hostFile, caddyManager, args)
 		},
 	}
 }
@@ -121,6 +121,13 @@ func add(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager,
 	if err != nil {
 		return err
 	}
+	wasLocalTarget := false
+	for _, rule := range state.Rules {
+		if rule.Domain == domain && isLocalTarget(rule.Target) {
+			wasLocalTarget = true
+			break
+		}
+	}
 
 	if err := state.Upsert(config.Rule{Domain: domain, Target: target}); err != nil {
 		return err
@@ -131,14 +138,25 @@ func add(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager,
 	if err := hostFile.Sync(state.Rules); err != nil {
 		return err
 	}
-	if err := caddyManager.Sync(state.Rules); err != nil {
+	if !isLocalTarget(target) {
+		if wasLocalTarget {
+			if err := caddyManager.Sync(localTargetRules(state.Rules)); err != nil {
+				return err
+			}
+			if err := caddyManager.Reload(); err != nil {
+				return err
+			}
+		}
+		printRulesTable([]config.Rule{findRuleByDomain(state.Rules, domain)})
+		return nil
+	}
+	if err := caddyManager.Sync(localTargetRules(state.Rules)); err != nil {
 		return err
 	}
 	if err := caddyManager.Reload(); err != nil {
 		return err
 	}
 
-	fmt.Println("已添加代理:")
 	printRulesTable([]config.Rule{findRuleByDomain(state.Rules, domain)})
 	return nil
 }
@@ -154,19 +172,29 @@ func initCaddy(caddyManager *caddy.Manager) error {
 	return nil
 }
 
-func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager, id string) error {
-	if err := validateRuleID(id); err != nil {
-		return err
+func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager, ids []string) error {
+	for _, id := range ids {
+		if err := validateRuleID(id); err != nil {
+			return err
+		}
 	}
 
 	state, err := store.Load()
 	if err != nil {
 		return err
 	}
+	localBefore := len(localTargetRules(state.Rules))
 
-	rule, ok := state.RemoveByID(id)
-	if !ok {
-		fmt.Printf("规则不存在: %s\n", id)
+	removed := make([]config.Rule, 0, len(ids))
+	for _, id := range ids {
+		rule, ok := state.RemoveByID(id)
+		if !ok {
+			fmt.Printf("规则不存在: %s\n", id)
+			continue
+		}
+		removed = append(removed, rule)
+	}
+	if len(removed) == 0 {
 		return nil
 	}
 
@@ -176,15 +204,17 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 	if err := hostFile.Sync(state.Rules); err != nil {
 		return err
 	}
-	if err := caddyManager.Sync(state.Rules); err != nil {
-		return err
-	}
-	if err := caddyManager.Reload(); err != nil {
-		return err
+	localAfterRules := localTargetRules(state.Rules)
+	if localBefore != len(localAfterRules) || containsLocalTarget(removed) {
+		if err := caddyManager.Sync(localAfterRules); err != nil {
+			return err
+		}
+		if err := caddyManager.Reload(); err != nil {
+			return err
+		}
 	}
 
-	fmt.Println("已删除代理:")
-	printRulesTable([]config.Rule{rule})
+	printRulesTable(removed)
 	return nil
 }
 
@@ -239,6 +269,38 @@ func findRuleByDomain(rules []config.Rule, domain string) config.Rule {
 	return config.Rule{Domain: domain}
 }
 
+func localTargetRules(rules []config.Rule) []config.Rule {
+	local := make([]config.Rule, 0, len(rules))
+	for _, rule := range rules {
+		if isLocalTarget(rule.Target) {
+			local = append(local, rule)
+		}
+	}
+	return local
+}
+
+func containsLocalTarget(rules []config.Rule) bool {
+	for _, rule := range rules {
+		if isLocalTarget(rule.Target) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLocalTarget(target string) bool {
+	host, _, ok := strings.Cut(target, ":")
+	return ok && (host == "localhost" || host == "127.0.0.1")
+}
+
+func targetHost(target string) string {
+	host, _, ok := strings.Cut(target, ":")
+	if ok {
+		return host
+	}
+	return target
+}
+
 func validateDomain(domain string) error {
 	if domain == "" {
 		return errors.New("domain 不能为空")
@@ -264,11 +326,14 @@ func validateRuleID(id string) error {
 
 func validateTarget(target string) error {
 	host, portText, ok := strings.Cut(target, ":")
-	if !ok || host == "" || portText == "" || strings.Contains(portText, ":") {
-		return errors.New("target 格式错误，请使用 host:port，例如 localhost:3000")
+	if !ok {
+		if target == "" || strings.ContainsAny(target, " \t\n\r/") {
+			return errors.New("target 格式错误，请使用 host 或 host:port，例如 1.1.1.1 或 localhost:3000")
+		}
+		return nil
 	}
-	if host != "localhost" && host != "127.0.0.1" {
-		return errors.New("MVP 版本仅支持 localhost 或 127.0.0.1 作为目标主机")
+	if host == "" || portText == "" || strings.Contains(portText, ":") {
+		return errors.New("target 格式错误，请使用 host:port，例如 localhost:3000")
 	}
 	port, err := strconv.Atoi(portText)
 	if err != nil || port < 1 || port > 65535 {
