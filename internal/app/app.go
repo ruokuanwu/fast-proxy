@@ -195,6 +195,7 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 		resolvedIDs = append(resolvedIDs, resolvedID)
 	}
 	if len(resolvedIDs) == 0 {
+		printRulesTable(nil)
 		return nil
 	}
 	localBefore := len(localTargetRules(state.Rules))
@@ -209,6 +210,7 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 		removed = append(removed, rule)
 	}
 	if len(removed) == 0 {
+		printRulesTable(removed)
 		return nil
 	}
 
