@@ -35,7 +35,7 @@ func (m *Manager) Init() error {
 	}
 	if err := os.MkdirAll(m.sitesDir, 0755); err != nil {
 		if errors.Is(err, os.ErrPermission) {
-			return fmt.Errorf("无权限创建 %s，请使用 sudo 重新执行", m.sitesDir)
+			return fmt.Errorf("permission denied while creating %s; please rerun with sudo", m.sitesDir)
 		}
 		return err
 	}
@@ -54,7 +54,7 @@ func (m *Manager) EnsureInitialized() error {
 		return err
 	}
 	if !hasImportLine(string(data), m.importLine()) {
-		return fmt.Errorf("未检测到 fast-proxy Caddy import，请先执行: sudo fast-proxy init")
+		return fmt.Errorf("fast-proxy Caddy import was not found; run first: sudo fast-proxy init")
 	}
 	return nil
 }
@@ -99,13 +99,13 @@ func (m *Manager) Reload() error {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return errors.New("未找到 caddy，请先安装 Caddy")
+			return errors.New("caddy was not found; please install Caddy first")
 		}
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
 			message = err.Error()
 		}
-		return fmt.Errorf("Caddy reload 失败: %s", message)
+		return fmt.Errorf("Caddy reload failed: %s", message)
 	}
 	return nil
 }
@@ -116,13 +116,13 @@ func (m *Manager) Validate() error {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return errors.New("未找到 caddy，请先安装 Caddy")
+			return errors.New("caddy was not found; please install Caddy first")
 		}
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
 			message = err.Error()
 		}
-		return fmt.Errorf("Caddy validate 失败: %s", message)
+		return fmt.Errorf("Caddy validate failed: %s", message)
 	}
 	return nil
 }
@@ -148,20 +148,20 @@ func Version() (string, error) {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return "", errors.New("未找到 caddy")
+			return "", errors.New("caddy was not found")
 		}
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
 			message = err.Error()
 		}
-		return "", fmt.Errorf("获取 Caddy 版本失败: %s", message)
+		return "", fmt.Errorf("failed to get Caddy version: %s", message)
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }
 
 func ServiceStatus() (string, error) {
 	if _, err := exec.LookPath("systemctl"); err != nil {
-		return "", errors.New("当前系统未检测到 systemctl，请手动确认 Caddy 是否运行")
+		return "", errors.New("systemctl was not found on this system; please verify manually whether Caddy is running")
 	}
 	cmd := exec.Command("systemctl", "is-active", "caddy")
 	var stdout bytes.Buffer
@@ -182,9 +182,9 @@ func ServiceStatus() (string, error) {
 }
 
 func InstallInstructions() string {
-	return strings.TrimSpace(`未检测到 Caddy。
+	return strings.TrimSpace(`Caddy was not found.
 
-fast-proxy 依赖 Caddy 提供反向代理能力。请先安装 Caddy：
+fast-proxy depends on Caddy for reverse proxy support. Please install Caddy first:
 
 Ubuntu/Debian:
   sudo apt install -y caddy
@@ -198,10 +198,10 @@ Arch Linux:
 Fedora:
   sudo dnf install caddy
 
-安装完成后重新执行：
+After installation, run again:
   sudo fp init
 
-如果你的系统包仓库没有 Caddy，请参考官方文档：
+If Caddy is unavailable in your system package repository, see the official documentation:
   https://caddyserver.com/docs/install`)
 }
 
@@ -225,7 +225,7 @@ func (m *Manager) ensureImport() error {
 	content += "\n# fast-proxy\n" + line + "\n"
 	if err := os.WriteFile(m.caddyfile, []byte(content), 0644); err != nil {
 		if errors.Is(err, os.ErrPermission) {
-			return fmt.Errorf("无权限修改 %s，请使用 sudo 重新执行", m.caddyfile)
+			return fmt.Errorf("permission denied while modifying %s; please rerun with sudo", m.caddyfile)
 		}
 		return err
 	}

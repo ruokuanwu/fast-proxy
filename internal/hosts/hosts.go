@@ -43,7 +43,7 @@ func (f *File) Sync(rules []config.Rule) error {
 	content := strings.TrimRight(strings.Join(next, "\n"), "\n") + "\n"
 	if err := writeFileAtomic(f.path, []byte(content), 0644); err != nil {
 		if errors.Is(err, os.ErrPermission) {
-			return fmt.Errorf("无权限修改 %s，请使用 sudo 重新执行", f.path)
+			return fmt.Errorf("permission denied while modifying %s; please rerun with sudo", f.path)
 		}
 		return err
 	}

@@ -23,7 +23,7 @@ func Run(args []string) error {
 func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "fast-proxy",
-		Short:         "快速配置本地反向代理",
+		Short:         "Quickly configure local reverse proxies",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -41,7 +41,7 @@ func newRootCommand() *cobra.Command {
 func newInitCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "初始化 fast-proxy 的 Caddy 配置",
+		Short: "Initialize fast-proxy Caddy configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, _, caddyManager, err := newRuntime()
@@ -56,7 +56,7 @@ func newInitCommand() *cobra.Command {
 func newDoctorCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
-		Short: "检查 fast-proxy 运行环境",
+		Short: "Check the fast-proxy runtime environment",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, _, caddyManager, err := newRuntime()
@@ -71,7 +71,7 @@ func newDoctorCommand() *cobra.Command {
 func newSyncCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync",
-		Short: "根据状态文件重新同步 hosts 和 Caddy 配置",
+		Short: "Resync hosts and Caddy configuration from the state file",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, hostFile, caddyManager, err := newRuntime()
@@ -86,7 +86,7 @@ func newSyncCommand() *cobra.Command {
 func newAddCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add <domain> <host:port>",
-		Short: "添加本地域名反向代理",
+		Short: "Add a local domain reverse proxy",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, hostFile, caddyManager, err := newRuntime()
@@ -102,7 +102,7 @@ func newRemoveCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:     "remove <id> [id...]",
 		Aliases: []string{"rm", "delete"},
-		Short:   "按 ID 删除本地域名反向代理",
+		Short:   "Remove local domain reverse proxies by ID",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, hostFile, caddyManager, err := newRuntime()
@@ -118,7 +118,7 @@ func newListCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "查看本工具管理的代理规则",
+		Short:   "List proxy rules managed by this tool",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, _, _, err := newRuntime()
@@ -201,16 +201,16 @@ func initCaddy(caddyManager *caddy.Manager) error {
 	if err := caddyManager.Reload(); err != nil {
 		return err
 	}
-	fmt.Println("fast-proxy 初始化完成。")
+	fmt.Println("fast-proxy initialization completed.")
 	fmt.Println()
-	fmt.Println("已完成：")
-	fmt.Println("  ✓ 检测 Caddy")
-	fmt.Printf("  ✓ 创建站点目录: %s\n", caddyManager.SitesDir())
-	fmt.Printf("  ✓ 更新 Caddyfile: %s\n", caddyManager.Caddyfile())
-	fmt.Println("  ✓ 校验 Caddy 配置")
-	fmt.Println("  ✓ 重载 Caddy")
+	fmt.Println("Completed:")
+	fmt.Println("  ✓ Checked Caddy")
+	fmt.Printf("  ✓ Created site directory: %s\n", caddyManager.SitesDir())
+	fmt.Printf("  ✓ Updated Caddyfile: %s\n", caddyManager.Caddyfile())
+	fmt.Println("  ✓ Validated Caddy configuration")
+	fmt.Println("  ✓ Reloaded Caddy")
 	fmt.Println()
-	fmt.Println("现在可以添加代理：")
+	fmt.Println("You can now add a proxy:")
 	fmt.Println("  sudo fp add app.test localhost:3000")
 	return nil
 }
@@ -220,7 +220,7 @@ func doctor(store *config.Store, caddyManager *caddy.Manager) error {
 	fmt.Println()
 
 	if !caddy.IsInstalled() {
-		printCheck(false, "Caddy 未安装")
+		printCheck(false, "Caddy is not installed")
 		fmt.Println()
 		fmt.Println(caddy.InstallInstructions())
 		return nil
@@ -229,58 +229,58 @@ func doctor(store *config.Store, caddyManager *caddy.Manager) error {
 	if err != nil {
 		printCheck(false, err.Error())
 	} else {
-		printCheck(true, "Caddy 已安装: "+version)
+		printCheck(true, "Caddy is installed: "+version)
 	}
 
 	if _, err := os.Stat(caddyManager.Caddyfile()); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			printCheck(false, "Caddyfile 不存在: "+caddyManager.Caddyfile())
+			printCheck(false, "Caddyfile does not exist: "+caddyManager.Caddyfile())
 		} else {
-			printCheck(false, "无法读取 Caddyfile: "+err.Error())
+			printCheck(false, "Unable to read Caddyfile: "+err.Error())
 		}
 	} else {
-		printCheck(true, "Caddyfile 存在: "+caddyManager.Caddyfile())
+		printCheck(true, "Caddyfile exists: "+caddyManager.Caddyfile())
 	}
 
 	if stat, err := os.Stat(caddyManager.SitesDir()); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			printCheck(false, "站点目录不存在: "+caddyManager.SitesDir())
+			printCheck(false, "Site directory does not exist: "+caddyManager.SitesDir())
 		} else {
-			printCheck(false, "无法读取站点目录: "+err.Error())
+			printCheck(false, "Unable to read site directory: "+err.Error())
 		}
 	} else if !stat.IsDir() {
-		printCheck(false, "站点路径不是目录: "+caddyManager.SitesDir())
+		printCheck(false, "Site path is not a directory: "+caddyManager.SitesDir())
 	} else {
-		printCheck(true, "站点目录存在: "+caddyManager.SitesDir())
+		printCheck(true, "Site directory exists: "+caddyManager.SitesDir())
 	}
 
 	if ok, err := caddyManager.HasImport(); err != nil {
-		printCheck(false, "无法检查 fast-proxy import: "+err.Error())
+		printCheck(false, "Unable to check fast-proxy import: "+err.Error())
 	} else if !ok {
-		printCheck(false, "未配置 fast-proxy import，请执行: sudo fp init")
+		printCheck(false, "fast-proxy import is not configured; run: sudo fp init")
 	} else {
-		printCheck(true, "fast-proxy import 已配置")
+		printCheck(true, "fast-proxy import is configured")
 	}
 
 	if _, err := store.Load(); err != nil {
-		printCheck(false, "状态文件异常: "+err.Error())
+		printCheck(false, "State file error: "+err.Error())
 	} else {
-		printCheck(true, "状态文件正常")
+		printCheck(true, "State file is valid")
 	}
 
 	if err := caddyManager.Validate(); err != nil {
 		printCheck(false, err.Error())
 	} else {
-		printCheck(true, "Caddy 配置校验通过")
+		printCheck(true, "Caddy configuration is valid")
 	}
 
 	if status, err := caddy.ServiceStatus(); err != nil {
-		printCheck(false, "Caddy 服务状态: "+status)
+		printCheck(false, "Caddy service status: "+status)
 		fmt.Println()
-		fmt.Println("建议修复：")
+		fmt.Println("Suggested fix:")
 		fmt.Println("  sudo systemctl enable --now caddy")
 	} else {
-		printCheck(true, "Caddy 服务状态: "+status)
+		printCheck(true, "Caddy service status: "+status)
 	}
 
 	return nil
@@ -301,7 +301,7 @@ func syncState(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Ma
 		return err
 	}
 
-	fmt.Println("已同步：")
+	fmt.Println("Synced:")
 	fmt.Println("  ✓ /etc/hosts")
 	fmt.Printf("  ✓ %s/*.caddy\n", caddyManager.SitesDir())
 	fmt.Println("  ✓ Caddy reload")
@@ -350,7 +350,7 @@ func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manag
 	for _, id := range resolvedIDs {
 		rule, ok := state.RemoveByID(id)
 		if !ok {
-			fmt.Printf("规则不存在: %s\n", id)
+			fmt.Printf("Rule does not exist: %s\n", id)
 			continue
 		}
 		removed = append(removed, rule)
@@ -392,7 +392,7 @@ func resolveRuleIDPrefix(rules []config.Rule, prefix string) (string, bool, erro
 		if strings.HasPrefix(rule.ID, prefix) {
 			matches = append(matches, rule.ID)
 			if len(matches) > 1 {
-				return "", false, fmt.Errorf("id 前缀不唯一: %s，匹配到: %s", prefix, strings.Join(matches, ", "))
+				return "", false, fmt.Errorf("id prefix is ambiguous: %s; matches: %s", prefix, strings.Join(matches, ", "))
 			}
 		}
 	}
@@ -487,23 +487,23 @@ func targetHost(target string) string {
 
 func validateDomain(domain string) error {
 	if domain == "" {
-		return errors.New("domain 不能为空")
+		return errors.New("domain cannot be empty")
 	}
 	if domain == "localhost" {
-		return errors.New("不允许代理 localhost")
+		return errors.New("proxying localhost is not allowed")
 	}
 	if strings.ContainsAny(domain, " /:") {
-		return fmt.Errorf("domain 格式错误: %s", domain)
+		return fmt.Errorf("invalid domain format: %s", domain)
 	}
 	return nil
 }
 
 func validateRuleID(id string) error {
 	if id == "" {
-		return errors.New("id 不能为空")
+		return errors.New("id cannot be empty")
 	}
 	if strings.ContainsAny(id, " \t\n\r") {
-		return fmt.Errorf("id 格式错误: %s", id)
+		return fmt.Errorf("invalid id format: %s", id)
 	}
 	return nil
 }
@@ -512,16 +512,16 @@ func validateTarget(target string) error {
 	host, portText, ok := strings.Cut(target, ":")
 	if !ok {
 		if target == "" || strings.ContainsAny(target, " \t\n\r/") {
-			return errors.New("target 格式错误，请使用 host 或 host:port，例如 1.1.1.1 或 localhost:3000")
+			return errors.New("invalid target format; use host or host:port, for example 1.1.1.1 or localhost:3000")
 		}
 		return nil
 	}
 	if host == "" || portText == "" || strings.Contains(portText, ":") {
-		return errors.New("target 格式错误，请使用 host:port，例如 localhost:3000")
+		return errors.New("invalid target format; use host:port, for example localhost:3000")
 	}
 	port, err := strconv.Atoi(portText)
 	if err != nil || port < 1 || port > 65535 {
-		return errors.New("target 端口必须是 1-65535 的整数")
+		return errors.New("target port must be an integer from 1 to 65535")
 	}
 	return nil
 }

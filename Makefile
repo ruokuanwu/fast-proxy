@@ -6,32 +6,32 @@ BIN_DIR := bin
 BIN := $(BIN_DIR)/$(APP_NAME)
 PREFIX ?= /usr/local
 
-help: ## 显示可用命令
+help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-12s %s\n", $$1, $$2}'
 
-build: ## 构建二进制文件到 bin/fast-proxy
+build: ## Build the binary into bin/fast-proxy
 	@mkdir -p $(BIN_DIR)
 	go build -o $(BIN) $(CMD_DIR)
 
-install: build ## 安装到 $(PREFIX)/bin，需要权限时请使用 sudo
+install: build ## Install into $(PREFIX)/bin; use sudo if permissions are required
 	sudo install -m 0755 $(BIN) $(PREFIX)/bin/$(APP_NAME)
 	sudo ln -sf $(PREFIX)/bin/$(APP_NAME) $(PREFIX)/bin/fp
 
-uninstall: ## 从 $(PREFIX)/bin 卸载，需要权限时请使用 sudo
+uninstall: ## Uninstall from $(PREFIX)/bin; use sudo if permissions are required
 	sudo rm -f $(PREFIX)/bin/$(APP_NAME)
 	sudo rm -f $(PREFIX)/bin/fp
 
-run: ## 运行 CLI，可通过 ARGS="list" 传参
+run: ## Run the CLI; pass arguments with ARGS="list"
 	go run $(CMD_DIR) $(ARGS)
 
-test: ## 运行测试
+test: ## Run tests
 	go test ./...
 
-fmt: ## 格式化 Go 代码
+fmt: ## Format Go code
 	go fmt ./...
 
-tidy: ## 整理 Go 依赖
+tidy: ## Tidy Go dependencies
 	go mod tidy
 
-clean: ## 清理构建产物
+clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)
