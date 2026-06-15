@@ -15,9 +15,11 @@ build: ## 构建二进制文件到 bin/fast-proxy
 
 install: build ## 安装到 $(PREFIX)/bin，需要权限时请使用 sudo
 	sudo install -m 0755 $(BIN) $(PREFIX)/bin/$(APP_NAME)
+	sudo ln -sf $(PREFIX)/bin/$(APP_NAME) $(PREFIX)/bin/fp
 
 uninstall: ## 从 $(PREFIX)/bin 卸载，需要权限时请使用 sudo
 	sudo rm -f $(PREFIX)/bin/$(APP_NAME)
+	sudo rm -f $(PREFIX)/bin/fp
 
 run: ## 运行 CLI，可通过 ARGS="list" 传参
 	go run $(CMD_DIR) $(ARGS)

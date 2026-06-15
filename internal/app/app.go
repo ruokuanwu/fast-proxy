@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,8 @@ func newRootCommand() *cobra.Command {
 
 	cmd.AddCommand(newAddCommand())
 	cmd.AddCommand(newInitCommand())
+	cmd.AddCommand(newDoctorCommand())
+	cmd.AddCommand(newSyncCommand())
 	cmd.AddCommand(newRemoveCommand())
 	cmd.AddCommand(newListCommand())
 
@@ -38,7 +41,7 @@ func newRootCommand() *cobra.Command {
 func newInitCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "初始化系统 Caddy 配置",
+		Short: "初始化 fast-proxy 的 Caddy 配置",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, _, caddyManager, err := newRuntime()
@@ -46,6 +49,36 @@ func newInitCommand() *cobra.Command {
 				return err
 			}
 			return initCaddy(caddyManager)
+		},
+	}
+}
+
+func newDoctorCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "doctor",
+		Short: "检查 fast-proxy 运行环境",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, _, caddyManager, err := newRuntime()
+			if err != nil {
+				return err
+			}
+			return doctor(store, caddyManager)
+		},
+	}
+}
+
+func newSyncCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "sync",
+		Short: "根据状态文件重新同步 hosts 和 Caddy 配置",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, hostFile, caddyManager, err := newRuntime()
+			if err != nil {
+				return err
+			}
+			return syncState(store, hostFile, caddyManager)
 		},
 	}
 }
@@ -168,8 +201,121 @@ func initCaddy(caddyManager *caddy.Manager) error {
 	if err := caddyManager.Reload(); err != nil {
 		return err
 	}
-	fmt.Println("fast-proxy Caddy 配置已初始化")
+	fmt.Println("fast-proxy 初始化完成。")
+	fmt.Println()
+	fmt.Println("已完成：")
+	fmt.Println("  ✓ 检测 Caddy")
+	fmt.Printf("  ✓ 创建站点目录: %s\n", caddyManager.SitesDir())
+	fmt.Printf("  ✓ 更新 Caddyfile: %s\n", caddyManager.Caddyfile())
+	fmt.Println("  ✓ 校验 Caddy 配置")
+	fmt.Println("  ✓ 重载 Caddy")
+	fmt.Println()
+	fmt.Println("现在可以添加代理：")
+	fmt.Println("  sudo fp add app.test localhost:3000")
 	return nil
+}
+
+func doctor(store *config.Store, caddyManager *caddy.Manager) error {
+	fmt.Println("fast-proxy doctor")
+	fmt.Println()
+
+	if !caddy.IsInstalled() {
+		printCheck(false, "Caddy 未安装")
+		fmt.Println()
+		fmt.Println(caddy.InstallInstructions())
+		return nil
+	}
+	version, err := caddy.Version()
+	if err != nil {
+		printCheck(false, err.Error())
+	} else {
+		printCheck(true, "Caddy 已安装: "+version)
+	}
+
+	if _, err := os.Stat(caddyManager.Caddyfile()); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			printCheck(false, "Caddyfile 不存在: "+caddyManager.Caddyfile())
+		} else {
+			printCheck(false, "无法读取 Caddyfile: "+err.Error())
+		}
+	} else {
+		printCheck(true, "Caddyfile 存在: "+caddyManager.Caddyfile())
+	}
+
+	if stat, err := os.Stat(caddyManager.SitesDir()); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			printCheck(false, "站点目录不存在: "+caddyManager.SitesDir())
+		} else {
+			printCheck(false, "无法读取站点目录: "+err.Error())
+		}
+	} else if !stat.IsDir() {
+		printCheck(false, "站点路径不是目录: "+caddyManager.SitesDir())
+	} else {
+		printCheck(true, "站点目录存在: "+caddyManager.SitesDir())
+	}
+
+	if ok, err := caddyManager.HasImport(); err != nil {
+		printCheck(false, "无法检查 fast-proxy import: "+err.Error())
+	} else if !ok {
+		printCheck(false, "未配置 fast-proxy import，请执行: sudo fp init")
+	} else {
+		printCheck(true, "fast-proxy import 已配置")
+	}
+
+	if _, err := store.Load(); err != nil {
+		printCheck(false, "状态文件异常: "+err.Error())
+	} else {
+		printCheck(true, "状态文件正常")
+	}
+
+	if err := caddyManager.Validate(); err != nil {
+		printCheck(false, err.Error())
+	} else {
+		printCheck(true, "Caddy 配置校验通过")
+	}
+
+	if status, err := caddy.ServiceStatus(); err != nil {
+		printCheck(false, "Caddy 服务状态: "+status)
+		fmt.Println()
+		fmt.Println("建议修复：")
+		fmt.Println("  sudo systemctl enable --now caddy")
+	} else {
+		printCheck(true, "Caddy 服务状态: "+status)
+	}
+
+	return nil
+}
+
+func syncState(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager) error {
+	state, err := store.Load()
+	if err != nil {
+		return err
+	}
+	if err := hostFile.Sync(state.Rules); err != nil {
+		return err
+	}
+	if err := caddyManager.Sync(localTargetRules(state.Rules)); err != nil {
+		return err
+	}
+	if err := caddyManager.Reload(); err != nil {
+		return err
+	}
+
+	fmt.Println("已同步：")
+	fmt.Println("  ✓ /etc/hosts")
+	fmt.Printf("  ✓ %s/*.caddy\n", caddyManager.SitesDir())
+	fmt.Println("  ✓ Caddy reload")
+	fmt.Println()
+	printRulesTable(state.Rules)
+	return nil
+}
+
+func printCheck(ok bool, message string) {
+	if ok {
+		fmt.Println("✓ " + message)
+		return
+	}
+	fmt.Println("✗ " + message)
 }
 
 func remove(store *config.Store, hostFile *hosts.File, caddyManager *caddy.Manager, ids []string) error {

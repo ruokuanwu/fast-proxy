@@ -21,6 +21,14 @@ func NewManager(caddyfile, sitesDir string) *Manager {
 	return &Manager{caddyfile: caddyfile, sitesDir: sitesDir}
 }
 
+func (m *Manager) Caddyfile() string {
+	return m.caddyfile
+}
+
+func (m *Manager) SitesDir() string {
+	return m.sitesDir
+}
+
 func (m *Manager) Init() error {
 	if err := requireCaddy(); err != nil {
 		return err
@@ -119,6 +127,84 @@ func (m *Manager) Validate() error {
 	return nil
 }
 
+func (m *Manager) HasImport() (bool, error) {
+	data, err := os.ReadFile(m.caddyfile)
+	if err != nil {
+		return false, err
+	}
+	return hasImportLine(string(data), m.importLine()), nil
+}
+
+func IsInstalled() bool {
+	_, err := exec.LookPath("caddy")
+	return err == nil
+}
+
+func Version() (string, error) {
+	cmd := exec.Command("caddy", "version")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return "", errors.New("未找到 caddy")
+		}
+		message := strings.TrimSpace(stderr.String())
+		if message == "" {
+			message = err.Error()
+		}
+		return "", fmt.Errorf("获取 Caddy 版本失败: %s", message)
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func ServiceStatus() (string, error) {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return "", errors.New("当前系统未检测到 systemctl，请手动确认 Caddy 是否运行")
+	}
+	cmd := exec.Command("systemctl", "is-active", "caddy")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		message := strings.TrimSpace(stdout.String())
+		if message == "" {
+			message = strings.TrimSpace(stderr.String())
+		}
+		if message == "" {
+			message = err.Error()
+		}
+		return message, err
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func InstallInstructions() string {
+	return strings.TrimSpace(`未检测到 Caddy。
+
+fast-proxy 依赖 Caddy 提供反向代理能力。请先安装 Caddy：
+
+Ubuntu/Debian:
+  sudo apt install -y caddy
+
+macOS:
+  brew install caddy
+
+Arch Linux:
+  sudo pacman -S caddy
+
+Fedora:
+  sudo dnf install caddy
+
+安装完成后重新执行：
+  sudo fp init
+
+如果你的系统包仓库没有 Caddy，请参考官方文档：
+  https://caddyserver.com/docs/install`)
+}
+
 func (m *Manager) ensureImport() error {
 	if err := os.MkdirAll(filepath.Dir(m.caddyfile), 0755); err != nil {
 		return err
@@ -162,7 +248,7 @@ func hasImportLine(content, line string) bool {
 func requireCaddy() error {
 	if _, err := exec.LookPath("caddy"); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return errors.New("未找到 caddy，请先安装 Caddy")
+			return errors.New(InstallInstructions())
 		}
 		return err
 	}
